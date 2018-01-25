@@ -27,16 +27,16 @@ Maybe some more fine-tuning with parameters would yield better results, but for 
 
 
 Using rf_classifier (random forest)
-<br>Your sentence: "As far as I am concerned, donuts are amazing." is an OPINION!
+<br> --: Your sentence: "As far as I am concerned, donuts are amazing." is an OPINION!
 
 Using svm_classifier (support vector machine)
-<br>Your sentence: "Donuts are a kind of ring-shaped, deep fried dessert." is a FACT!
+<br> --: Your sentence: "Donuts are a kind of ring-shaped, deep fried dessert." is a FACT!
 
 Using lr_classifier (logistic regression)
-<br>Your sentence: "Doughnut can also be spelled as "Donut", which is an American variant of the word." is a FACT!
+<br> --: Your sentence: "Doughnut can also be spelled as "Donut", which is an American variant of the word." is a FACT!
 
 Using nn_classifier (neural network)
-<br>Your sentence: "This new graphics card I bought recently is pretty amazing, it has no trouble rendering my 3D donuts art in high quality." is a FACT!
+<br> --: Your sentence: "This new graphics card I bought recently is pretty amazing, it has no trouble rendering my 3D donuts art in high quality." is a FACT!
 
 Using nn_classifier (neural network)
-Your sentence: "I think this new graphics card is amazing, it has no trouble rendering my 3D donuts art in high quality." is an OPINION!
+<br> --: Your sentence: "I think this new graphics card is amazing, it has no trouble rendering my 3D donuts art in high quality." is an OPINION!

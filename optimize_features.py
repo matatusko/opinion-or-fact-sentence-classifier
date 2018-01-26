@@ -2,26 +2,26 @@ def test_features(data, pick_features=0):
     # Exctract the features and y_labels we'll be using for training
     columns_to_drop = ['sentence', 'is_train', 'y_label']
     
-    if test_features == 0:
+    if pick_features == 0:
         # Use all the features, just drop the sentence, is_train and y_label
         features = data.drop(columns_to_drop, axis=1).columns
         
-    elif test_features == 1:
+    elif pick_features == 1:
         # Look only at the dependency tags
         columns_to_drop += ent_labels + tag_labels
         features = data.drop(columns_to_drop, axis=1).columns
         
-    elif test_features == 2:
+    elif pick_features == 2:
         # Look only at the entity tags
         columns_to_drop += dep_labels + tag_labels
         features = data.drop(columns_to_drop, axis=1).columns
         
-    elif test_features == 3:
+    elif pick_features == 3:
         # Look only at the POS tags
         columns_to_drop += dep_labels + ent_labels
         features = data.drop(columns_to_drop, axis=1).columns
         
-    elif test_features == 4:
+    elif pick_features == 4:
         # Keep only the most important
         features = data[most_important].columns
         

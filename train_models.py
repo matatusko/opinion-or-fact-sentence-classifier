@@ -1,10 +1,6 @@
 import pickle
 import numpy as np
 import pandas as pd
-
-#==============================================================================
-# DATA PREPROCESSING
-#==============================================================================
 from sklearn import metrics
 
 def load_pickle(filepath):
@@ -19,6 +15,9 @@ def save_pickle(data, filepath):
     pickle.dump(data, save_documents)
     save_documents.close()
 
+#==============================================================================
+# DATA PREPROCESSING
+#==============================================================================
 data = load_pickle('opinion_fact_sentences.pickle')
 data = pd.DataFrame(data)
 data.head()
@@ -32,6 +31,37 @@ print('Number of observations in the test data:',len(test))
 # Exctract the features and y_labels we'll be using for training
 columns_to_drop = ['sentence', 'is_train', 'y_label']
 features = data.drop(columns_to_drop, axis=1).columns
+
+# Optional for testing accuracy after the removal of least important features
+# according to random forest classifier. Not much change though
+test_feature_drop = 0
+if test_feature_drop:
+    feature_reduction_tests = ['sentence', 'is_train', 'y_label', 'NIL', 'HVS', 'GW',
+                               'BES', '#', '""', 'ADD', 'WP$', 'LS', 'XX', 'NFP', 'SYM',
+                               'AFX', 'UH', 'RBS', '$', 'PDT', 'WP', 'WRB', 'FW',
+                               'WORK_OF_ART', 'LAW', 'LANGUAGE', 'MONEY', 'QUANTITY']
+    # NIL - missing tag
+    # HVS - forms of have
+    # GW  - additional word in multi-word expression
+    # BES - auxiliary 'be'
+    # #   - symbol, number sign
+    # ""  - closing quotation mark
+    # ADD - email
+    # WP$ - wh-pronoun, possesive
+    # LS  - list item marker
+    # XX  - uknown
+    # NFP - superfluous punctuation
+    # SYM - symbol
+    # AFX - affix
+    # UH  - interjection
+    # RBS - adverb, superlative
+    # $   - symbol, currency
+    # PDT - predeterminer
+    # WP  - wh-pronoun, personal
+    # WRB - wh-adverb
+    # FW  - foreign word
+    features = data.drop(feature_reduction_tests, axis=1).columns
+
 y_train = pd.factorize(train['y_label'])[0]
 
 #==============================================================================
@@ -135,7 +165,7 @@ else:
     nn_classifier.fit(train[features], y_train)
     nn_preds = nn_classifier.predict(test[features])
     
-print('Accuracy Score with svm:')
+print('Accuracy Score with neural net:')
 print(metrics.accuracy_score(test['y_label'], nn_preds))
 # 0.921 Accuracy or around 0.920 with feature scaling
 

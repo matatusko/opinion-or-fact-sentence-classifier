@@ -2,6 +2,7 @@ import pickle
 import numpy as np
 import pandas as pd
 from sklearn import metrics
+import optimize_features
 
 def load_pickle(filepath):
     documents_f = open(filepath, 'rb')
@@ -14,7 +15,7 @@ def save_pickle(data, filepath):
     save_documents = open(filepath, 'wb')
     pickle.dump(data, save_documents)
     save_documents.close()
-
+    
 #==============================================================================
 # DATA PREPROCESSING
 #==============================================================================
@@ -28,40 +29,15 @@ train, test = data[data['is_train']==True], data[data['is_train']==False]
 print('Number of observations in the training data:', len(train))
 print('Number of observations in the test data:',len(test))
 
-# Exctract the features and y_labels we'll be using for training
-columns_to_drop = ['sentence', 'is_train', 'y_label']
-features = data.drop(columns_to_drop, axis=1).columns
-
-# Optional for testing accuracy after the removal of least important features
-# according to random forest classifier. Not much change though
-test_feature_drop = 0
-if test_feature_drop:
-    feature_reduction_tests = ['sentence', 'is_train', 'y_label', 'NIL', 'HVS', 'GW',
-                               'BES', '#', '""', 'ADD', 'WP$', 'LS', 'XX', 'NFP', 'SYM',
-                               'AFX', 'UH', 'RBS', '$', 'PDT', 'WP', 'WRB', 'FW',
-                               'WORK_OF_ART', 'LAW', 'LANGUAGE', 'MONEY', 'QUANTITY']
-    # NIL - missing tag
-    # HVS - forms of have
-    # GW  - additional word in multi-word expression
-    # BES - auxiliary 'be'
-    # #   - symbol, number sign
-    # ""  - closing quotation mark
-    # ADD - email
-    # WP$ - wh-pronoun, possesive
-    # LS  - list item marker
-    # XX  - uknown
-    # NFP - superfluous punctuation
-    # SYM - symbol
-    # AFX - affix
-    # UH  - interjection
-    # RBS - adverb, superlative
-    # $   - symbol, currency
-    # PDT - predeterminer
-    # WP  - wh-pronoun, personal
-    # WRB - wh-adverb
-    # FW  - foreign word
-    features = data.drop(feature_reduction_tests, axis=1).columns
-
+# Feature selection and optimization
+# 0 - use all features
+# 1 - only dependency tags
+# 2 - only entity tags
+# 3 - only part of speech tags
+# 4 - top features from every label, as returned by random forest
+pick_features = 0
+features = optimize_features.test_features(data, pick_features)
+    
 y_train = pd.factorize(train['y_label'])[0]
 
 #==============================================================================
@@ -89,12 +65,7 @@ print(metrics.accuracy_score(test['y_label'], rf_preds))
 feature_importance = list(zip(train[features], rf_classifier.feature_importances_))
 feature_importance = sorted(feature_importance, key=operator.itemgetter(1), reverse=True)
 
-print(feature_importance[:5])
-# NNP  => Proper Noun, Singular (Names, Countries, Cities etc.)
-# PRP  => Pronoun, Personal (he, she, I, me etc.)
-# NORP => Entity, Nationalities or religious or political groups.
-# NNS  => Noun, Plural (cats, houses, potatoes etc.)
-# VBD  => Verb, Past Tense (was, been, wrote etc.)
+print(feature_importance[:10])
 
 prediction, bias, contributions = treeinterpreter.predict(rf_classifier, test.iloc[1:2][features])
 print("Prediction", prediction)
@@ -125,7 +96,7 @@ print(cm)
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import MinMaxScaler
 
-feature_scaling = 0
+feature_scaling = 1
 if feature_scaling:
     scaler = MinMaxScaler()
     train_scaled = train.copy()
@@ -142,7 +113,6 @@ else:
     lr_classifier.fit(train[features], y_train)
     
     lr_pred = lr_classifier.predict(test[features])
-
 
 print('Accuracy with logistic regression:')
 print(metrics.accuracy_score(test['y_label'], lr_pred))
@@ -167,7 +137,7 @@ else:
     
 print('Accuracy Score with neural net:')
 print(metrics.accuracy_score(test['y_label'], nn_preds))
-# 0.921 Accuracy or around 0.920 with feature scaling
+# 0.921 Accuracy or around 0.920 with feature scaling (up to 0.93 with dependency features)
 
 cm = metrics.confusion_matrix(test['y_label'], nn_preds)
 print(cm)

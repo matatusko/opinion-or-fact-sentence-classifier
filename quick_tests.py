@@ -45,6 +45,34 @@ def number_of_fine_grained_pos_tags(sent):
             
     return tag_dict
 
+def number_of_dependency_tags(sent):
+    """
+    Find a dependency tag for each token within a sentence and add their amount
+    to a distionary, depending how many times that particular tag appears.
+    """
+    dep_dict = {
+    'acl': 0, 'advcl': 0, 'advmod': 0, 'amod': 0, 'appos': 0, 'aux': 0, 'case': 0,
+    'cc': 0, 'ccomp': 0, 'clf': 0, 'compound': 0, 'conj': 0, 'cop': 0, 'csubj': 0,
+    'dep': 0, 'det': 0, 'discourse': 0, 'dislocated': 0, 'expl': 0, 'fixed': 0,
+    'flat': 0, 'goeswith': 0, 'iobj': 0, 'list': 0, 'mark': 0, 'nmod': 0, 'nsubj': 0,
+    'nummod': 0, 'obj': 0, 'obl': 0, 'orphan': 0, 'parataxis': 0, 'prep': 0, 'punct': 0,
+    'pobj': 0, 'dobj': 0, 'attr': 0, 'relcl': 0, 'quantmod': 0, 'nsubjpass': 0,
+    'reparandum': 0, 'ROOT': 0, 'vocative': 0, 'xcomp': 0, 'auxpass': 0, 'agent': 0,
+    'poss': 0, 'pcomp': 0, 'npadvmod': 0, 'predet': 0, 'neg': 0, 'prt': 0, 'dative': 0,
+    'oprd': 0, 'preconj': 0, 'acomp': 0, 'csubjpass': 0, 'meta': 0, 'intj': 0, 
+    'TRAILING_DEP': 0}
+    
+    for token in sent:
+        if token.dep_ == '':
+            dep_dict['TRAILING_DEP'] += 1
+        else:
+            try:
+                dep_dict[token.dep_] += 1
+            except:
+                print('Unknown dependency for token: "' + token.orth_ +'". Passing.')
+        
+    return dep_dict
+
 def number_of_specific_entities(sent):
     """
     Finds all the entities in the sentence and returns the amont of 
@@ -72,6 +100,8 @@ def sample(test_sent, classifier):
     sentence_with_features.update(entities_dict)
     pos_dict = number_of_fine_grained_pos_tags(parsed_test[0])
     sentence_with_features.update(pos_dict)
+    dep_dict = number_of_dependency_tags(parsed_test[0])
+    sentence_with_features.update(dep_dict)
     
     # Transform features into array
     vals = np.fromiter(iter(sentence_with_features.values()), dtype=float)
@@ -93,16 +123,19 @@ nn_classifier = load_pickle('models/nn_classifier.pickle')
 
 # Bunch of tests with different classifiers and sentences
 test_sent = 'As far as I am concerned, donuts are amazing.'
-sample(test_sent, rf_classifier)
+sample(test_sent, nn_classifier)
 
 test_sent = 'Donuts are a kind of ring-shaped, deep fried dessert.'
-sample(test_sent, svm_classifier)
+sample(test_sent, rf_classifier)
 
 test_sent = 'Doughnut can also be spelled as "Donut", which is an American variant of the word.'
-sample(test_sent, lr_classifier)
+sample(test_sent, nn_classifier)
 
 test_sent = 'This new graphics card I bought recently is pretty amazing, it has no trouble rendering my 3D donuts art in high quality.'
 sample(test_sent, nn_classifier)
 
 test_sent = 'I think this new graphics card is amazing, it has no trouble rendering my 3D donuts art in high quality.'
 sample(test_sent, nn_classifier)
+
+test_sent = 'This is a very tasty donut, quite possibly the best in the entire world.'
+sample(test_sent, rf_classifier)

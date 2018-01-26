@@ -96,7 +96,7 @@ print(cm)
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import MinMaxScaler
 
-feature_scaling = 1
+feature_scaling = 0
 if feature_scaling:
     scaler = MinMaxScaler()
     train_scaled = train.copy()

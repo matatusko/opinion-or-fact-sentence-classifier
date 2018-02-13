@@ -21,6 +21,7 @@ I wasn't sure whether that would work, as usually people tend to go with BOW mod
 and based on my small sample test with sentences I've created, it is rather accurate.
 
 Just for the sake of it, I've built a BOW model on exactly the same dataset and run it through multiple ML algorithms, including Naive Bayes, Random Forest, SVM, Logistic Regression and NN. It was interesting to see that in the accuracy on a test set was way higher, reaching up to 97%. 
+
 However, when tested on random sample sentences outside of database, the BOW model (all algos testes) did a horrible job classifying all the sentences on donuts mostly incorrectly. I assume the BOW model tends to overfit and works only with sentences which are roughly on similar topic or contain the words in the wordlist. On the other hand, the model based on sentence structure (number of labeled POS tags) generalizes more and provides better results on new examples, at least when trained on relatively small dataset.
 
 ## Samples for sentence structure model

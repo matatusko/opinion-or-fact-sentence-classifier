@@ -6,9 +6,8 @@ import nltk
 import os
 from collections import Counter
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, RandomizedSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score
 from time import time
-import gensim
 
 import random
 seed = 2

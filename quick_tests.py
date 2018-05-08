@@ -1,5 +1,6 @@
 import pickle
 import numpy as np
+import pandas as pd
 import spacy
 nlp = spacy.load('en_core_web_lg')
 
@@ -90,7 +91,7 @@ def number_of_specific_entities(sent):
         
     return entity_dict
 
-def sample(test_sent, classifier):
+def sample(test_sent, classifier, scaler=None):
     # Preprocess using spacy
     parsed_test = divide_into_sentences(nlp(test_sent))
     
@@ -100,14 +101,17 @@ def sample(test_sent, classifier):
     sentence_with_features.update(entities_dict)
     pos_dict = number_of_fine_grained_pos_tags(parsed_test[0])
     sentence_with_features.update(pos_dict)
-    dep_dict = number_of_dependency_tags(parsed_test[0])
-    sentence_with_features.update(dep_dict)
+    #dep_dict = number_of_dependency_tags(parsed_test[0])
+    #sentence_with_features.update(dep_dict)
     
-    # Transform features into array
-    vals = np.fromiter(iter(sentence_with_features.values()), dtype=float)
+    df = pd.DataFrame(sentence_with_features, index=[0])
     
+    if scaler:
+        df = scaler.transform(df)
+    
+    prediction = classifier.predict(df)
+        
     # Run a prediction
-    prediction = classifier.predict(vals.reshape(1, -1))
     if prediction == 0:
         print('Your sentence: "' + test_sent + '" is a FACT!')
     else:
@@ -120,22 +124,27 @@ rf_classifier = load_pickle('models/rf_classifier.pickle')
 svm_classifier = load_pickle('models/svm_classifier.pickle')
 lr_classifier = load_pickle('models/lr_classifier.pickle')
 nn_classifier = load_pickle('models/nn_classifier.pickle')
+nn_classifier_scaled = load_pickle('models/nn_classifier_scaled.pickle')
+scaler = load_pickle('models/scaler.pickle')
 
 # Bunch of tests with different classifiers and sentences
 test_sent = 'As far as I am concerned, donuts are amazing.'
-sample(test_sent, nn_classifier)
+sample(test_sent, nn_classifier_scaled, scaler)
 
-test_sent = 'Donuts are a kind of ring-shaped, deep fried dessert.'
-sample(test_sent, rf_classifier)
+test_sent = 'Donuts are torus-shaped, deep fried desserts, very often with a jam feeling on the inside.'
+sample(test_sent, nn_classifier_scaled, scaler)
 
 test_sent = 'Doughnut can also be spelled as "Donut", which is an American variant of the word.'
-sample(test_sent, nn_classifier)
+sample(test_sent, nn_classifier_scaled, scaler)
 
 test_sent = 'This new graphics card I bought recently is pretty amazing, it has no trouble rendering my 3D donuts art in high quality.'
-sample(test_sent, nn_classifier)
+sample(test_sent, nn_classifier_scaled, scaler)
 
-test_sent = 'I think this new graphics card is amazing, it has no trouble rendering my 3D donuts art in high quality.'
-sample(test_sent, nn_classifier)
+test_sent = 'Noone knows what are the origins of donuts.'
+sample(test_sent, nn_classifier_scaled, scaler)
 
-test_sent = 'This is a very tasty donut, quite possibly the best in the entire world.'
-sample(test_sent, rf_classifier)
+test_sent = 'The earliest origins to the modern doughnuts are generally traced back to the olykoek ("oil(y) cake"), which Dutch settlers brought with them to early New York'
+sample(test_sent, nn_classifier_scaled, scaler)
+
+test_sent = 'This donut is quite possibly the best tasting donut in the entire world.'
+sample(test_sent, nn_classifier_scaled, scaler)

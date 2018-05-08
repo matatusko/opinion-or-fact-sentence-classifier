@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn import metrics
 import optimize_features
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, cross_validate 
 from time import time
 
 def load_pickle(filepath):
@@ -46,29 +46,51 @@ def test_classifier(X_train, y_train, X_test, y_test, classifier):
 
     return model, precision, recall, accuracy, f1
 
+
 def cv(classifier, X_train, y_train):
+    scoring = ['accuracy', 'f1', 'f1_micro', 'f1_macro', 'precision', 'recall']
     classifier_name = str(type(classifier).__name__)
     now = time()
     print("Crossvalidating " + classifier_name + "...")
-    accuracy = [cross_val_score(classifier, X_train, y_train, cv=8, n_jobs=-1)]
+    cv_results = [cross_validate(classifier, X_train, y_train, cv=8, n_jobs=-1, scoring=scoring, return_train_score=False)]
     print("Crosvalidation completed in {0}s".format(time() - now))
-    print("Accuracy: " + str(accuracy[0]))
-    print("Average accuracy: " + str(np.array(accuracy[0]).mean()))
+    #print("Accuracy: " + str(accuracy[0]))
+    #print("Average accuracy: " + str(np.array(accuracy[0]).mean()))
     
-    return accuracy
+    return cv_results
+
+def print_cm(cm):
+    print("               Predicted Fact     Predicted Opinion      Total ")
+    print("Actual Fact:       ", cm[0][0], "                  ", cm[0][1], "           ", (cm[0][0] + cm[0][1]))
+    print("Actual Optinion:    ", cm[1][0], "                 ",cm[1][1], "         ", (cm[1][0] + cm[1][1]))
+    print("                   ", (cm[0][0] + cm[1][0]), "                 ", (cm[0][1] + cm[1][1]))
     
 #==============================================================================
 # DATA PREPROCESSING
 #==============================================================================
+is_train = np.random.uniform(0, 1, len(data)) <= 0.85
+for index, example in enumerate(data):
+    data[index]['is_train'] = is_train[index]
+save_pickle(data, 'opinion_fact_sentences.pickle')
+
 data = load_pickle('opinion_fact_sentences.pickle')
 data = pd.DataFrame(data)
 data.head()
 
+count_opinion = 0
+count_fact = 0
+for example in data['y_label']:
+    if example == 0:
+        count_fact += 1
+    else:
+        count_opinion += 1
+print('Got {} opinions and {} factual sentences.'.format(count_opinion, count_fact))
+print('Total sentences: {}'.format(count_opinion + count_fact))
+
 # Divide the dataset into train and test sets
-data['is_train'] = np.random.uniform(0, 1, len(data)) <= 0.85
 train, test = data[data['is_train']==True], data[data['is_train']==False]
 print('Number of observations in the training data:', len(train))
-print('Number of observations in the test data:',len(test))
+print('Number of observations in the test data:', len(test))
 
 # Feature selection and optimization
 # 0 - use all features
@@ -81,7 +103,10 @@ pick_features = 5
 features = optimize_features.test_features(data, pick_features)
     
 y_train = pd.factorize(train['y_label'])[0]
+assert(len(y_train) + len(test) == len(data))
 
+real_values = test['y_label']
+save_pickle(real_values, './real_test_values.pickle')
 #==============================================================================
 # # Train the RANDOM FOREST classifier
 #==============================================================================
@@ -93,23 +118,8 @@ import operator
 rf_classifier = RandomForestClassifier(n_estimators=500, oob_score=True, n_jobs=-1,random_state=50, 
                              max_features=None)
 rf_classifier, precision, recall, accuracy, f1 = test_classifier(train[features], y_train, test[features], test['y_label'], rf_classifier)
-rf_acc = cv(rf_classifier, train[features], y_train)
+rf_cv_scores = cv(rf_classifier, data[features], data['y_label'])
 
-# Learing time 33.64654469490051s
-# Predicting time 0.3398551940917969s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.88263555  0.92587776]
-# Precision[ 0.91205674  0.90739167]
-# Recall   [ 0.85505319  0.94513274]
-# Accuracy 0.909139213603
-# 
-# Crosvalidation completed in 127.3513731956482s
-# CV Accuracy: [ 0.89548872  0.90827068  0.90827068  0.9112782   0.90451128  0.9075188
-#                0.9075188   0.88713318]
-# Average accuracy: 0.903748790713
-
-# View a list of the features and their importance scores
 feature_importance = list(zip(train[features], rf_classifier.feature_importances_))
 feature_importance = sorted(feature_importance, key=operator.itemgetter(1), reverse=True)
 
@@ -121,7 +131,35 @@ print("Bias (trainset prior)", bias)
 print("Feature contributions:")
 for contrib, feature in zip(contributions[0], test[features].columns):
     print(feature, contrib)
+
+rf_classifier = rf_classifier.fit(train[features], train['y_label'])
+rf_preds_epos = rf_classifier.predict(test[features])
+rf_cm = metrics.confusion_matrix(test['y_label'], rf_preds_epos)
+print_cm(rf_cm)
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1007                    114             1121
+# Actual Optinion:     102                   1008           1110
+#                     1109                   1122
+
     
+#==============================================================================
+# NAIVE BAYES
+#==============================================================================
+from sklearn.naive_bayes import BernoulliNB
+nb_classifier, precision, recall, accuracy, f1 = test_classifier(train[features], y_train, test[features], test['y_label'], BernoulliNB())
+nb_cv_scores = cv(BernoulliNB(), data[features], data['y_label'])
+
+nb_classifier = BernoulliNB().fit(train[features], train['y_label'])
+nb_preds_epos = nb_classifier.predict(test[features])    
+nb_cm = metrics.confusion_matrix(test['y_label'], nb_preds_epos)
+print_cm(nb_cm )
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        895                    226             1121
+# Actual Optinion:     77                   1033           1110
+#                     972                   1259
+
 #==============================================================================
 # SUPPORT VECTOR MACHINE
 #==============================================================================
@@ -129,29 +167,22 @@ from sklearn import svm
 
 svm_classifier = svm.SVC()
 svm_classifier, precision, recall, accuracy, f1 = test_classifier(train[features], y_train, test[features], test['y_label'], svm_classifier)
-svm_acc = cv(svm_classifier, train[features], y_train)
-
-# Learing time 5.493837594985962s
-# Predicting time 0.6094698905944824s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.89821183  0.93576389]
-# Precision[ 0.93956835  0.91047297]
-# Recall   [ 0.86034256  0.9625    ]
-# Accuracy 0.921234699308
-#
-# Crosvalidation completed in 18.2373263835907s
-# CV Accuracy: [ 0.91278195  0.9112782   0.93007519  0.92180451  0.92105263  0.90977444
-#                0.92030075  0.90293454]
-# Average accuracy: 0.916250275802
+svm_acc = cv(svm_classifier, data[features], data['y_label'])
 
 svm_preds = svm_classifier.predict(test[features])
 print('Accuracy Score with svm:')
 print(metrics.accuracy_score(test['y_label'], svm_preds))
 # ~0.91 - 0.93 accuracy
 
-cm = metrics.confusion_matrix(test['y_label'], svm_preds)
-print(cm)
+svm_classifier = svm_classifier.fit(train[features], train['y_label'])
+svm_preds_epos = svm_classifier.predict(test[features])    
+svm_cm = metrics.confusion_matrix(test['y_label'], svm_preds_epos)
+print_cm(svm_cm)
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1000                  121            1121
+# Actual Optinion:     65                   1045           1110
+#                     1065                  1166
 
 #==============================================================================
 # LINEAR REGRESSION
@@ -166,61 +197,32 @@ if feature_scaling:
     train_scaled[features] = scaler.fit_transform(train_scaled[features])
     test_scaled = test.copy()
     test_scaled[features] = scaler.transform(test_scaled[features])
+    
+    data_scaled = data.copy()
+    data_scaled[features] = scaler.fit_transform(data[features])
 
     lr_classifier = LogisticRegression(random_state=0, verbose=1, C=0.01)
     
     lr_classifier_scaled, precision, recall, accuracy, f1 = test_classifier(train_scaled[features], y_train, 
                                                                      test_scaled[features], test['y_label'], 
                                                                      lr_classifier)
-    lr_acc_scaled = cv(lr_classifier, train_scaled[features], y_train)
-    
-    lr_pred = lr_classifier.predict(test_scaled[features])
-    
-    # [LibLinear]Learing time 0.046885013580322266s
-    # Predicting time 0.0s
-    # =================== Results ===================
-    #             Fact     Opinion                   
-    # F1       [ 0.69543147  0.86024845]
-    # Precision[ 0.97163121  0.76098901]
-    # Recall   [ 0.54150198  0.98928571]
-    # Accuracy 0.808408728047
-    #
-    # Crossvalidating LogisticRegression...
-    # Crosvalidation completed in 4.9046220779418945s
-    # CV Accuracy: [ 0.79849624  0.79774436  0.8112782   0.8         0.79548872  0.80902256
-    #   0.80526316  0.80361174]
-    # Average accuracy: 0.802613121404
-else:
-    lr_classifier = LogisticRegression(random_state=0, verbose=1, C=0.01)
-    
-    lr_classifier, precision, recall, accuracy, f1 = test_classifier(train[features], y_train, 
-                                                                     test[features], test['y_label'], 
-                                                                     lr_classifier)
-    lr_acc = cv(lr_classifier, train[features], y_train)
-    
-    lr_pred = lr_classifier.predict(test[features])
-    
-    # [LibLinear]Learing time 0.07819032669067383s
-    # Predicting time 0.0s
-    # =================== Results ===================
-    #             Fact     Opinion                   
-    # F1       [ 0.86823856  0.917962  ]
-    # Precision[ 0.91654466  0.88879599]
-    # Recall   [ 0.82476943  0.94910714]
-    # Accuracy 0.898882384247
-    #
-    # Crossvalidating LogisticRegression...
-    # Crosvalidation completed in 4.9425435066223145s
-    # CV Accuracy: [ 0.89398496  0.9         0.90601504  0.89774436  0.90075188  0.89548872
-    #   0.90827068  0.89014296]
-    # Average accuracy: 0.899049825467
+    lr_acc_scaled = cv(lr_classifier, data_scaled[features], data_scaled['y_label'])
+
+
 
 print('Accuracy with logistic regression:')
 print(metrics.accuracy_score(test['y_label'], lr_pred))
 # Around 0.912 accuracy or 0.807 with feature scaling
 
-cm = metrics.confusion_matrix(test['y_label'], lr_pred)
-print(cm)
+lr_classifier_scaled = lr_classifier.fit(train_scaled[features], train_scaled['y_label'])
+lr_preds_epos = lr_classifier_scaled.predict(test_scaled[features])    
+lr_cm = metrics.confusion_matrix(test['y_label'], lr_preds_epos)
+print_cm(lr_cm)
+
+#                 Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        854                    267             1121
+# Actual Optinion:     93                   1017           1110
+#                     947                   1284
 
 #==============================================================================
 # NEURAL NET CLASSIFIER
@@ -232,61 +234,36 @@ if feature_scaling:
     nn_classifier_scaled, precision, recall, accuracy, f1 = test_classifier(train_scaled[features], y_train, 
                                                                      test_scaled[features], test['y_label'], 
                                                                      nn_classifier)
-    nn_acc_scaled = cv(nn_classifier, train_scaled[features], y_train)
-    nn_preds = nn_classifier.predict(test_scaled[features])
+    nn_acc_scaled = cv(nn_classifier, data_scaled[features], data_scaled['y_label'])
     
-    # Learing time 44.22556495666504s
-    # Predicting time 0.03125405311584473s
-    # =================== Results ===================
-    #             Fact     Opinion                   
-    # F1       [ 0.90261921  0.9360952 ]
-    # Precision[ 0.92054795  0.92428198]
-    # Recall   [ 0.88537549  0.94821429]
-    # Accuracy 0.922831293241
-    #
-    # Crossvalidating MLPClassifier...
-    # Crosvalidation completed in 164.07786178588867s
-    # CV Accuracy: [ 0.91428571  0.93233083  0.93007519  0.92706767  0.92631579  0.92330827
-    #             0.91654135  0.91647856]
-    # Average accuracy: 0.923300420917
-    
-else:
-    nn_classifier = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(500, 5), random_state=1)
-    nn_classifier, precision, recall, accuracy, f1 = test_classifier(train[features], y_train, 
-                                                                     test[features], test['y_label'], 
-                                                                     nn_classifier)
-    nn_acc = cv(nn_classifier, train[features], y_train)
-    nn_preds = nn_classifier.predict(test[features])
-    
-    # Learing time 48.68243479728699s
-    # Predicting time 0.01562952995300293s
-    # =================== Results ===================
-    #             Fact     Opinion                   
-    # F1       [ 0.87608841  0.9183223 ]
-    # Precision[ 0.89100817  0.90829694]
-    # Recall   [ 0.86166008  0.92857143]
-    # Accuracy 0.901543374135
-    #
-    # Crossvalidating MLPClassifier...
-    # Crosvalidation completed in 185.08190512657166s
-    # Accuracy: [ 0.91654135  0.9112782   0.92180451  0.91879699  0.9075188   0.91578947
-    #   0.91428571  0.90293454]
-    # Average accuracy: 0.913618696855
     
 print('Accuracy Score with neural net:')
 print(metrics.accuracy_score(test['y_label'], nn_preds))
 # 0.921 Accuracy or around 0.920 with feature scaling (up to 0.93 with dependency features)
 
-cm = metrics.confusion_matrix(test['y_label'], nn_preds)
-print(cm)
+nn_classifier_scaled = nn_classifier.fit(train_scaled[features], train_scaled['y_label'])
+nn_preds_epos = nn_classifier_scaled.predict(test_scaled[features])    
+nn_cm = metrics.confusion_matrix(test['y_label'], nn_preds_epos)
+print_cm(nn_cm)
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1019                  102             1121
+# Actual Optinion:     66                   1044           1110
+#                     1085                  1146
 
 #==============================================================================
 # SAVE MODELS
 #==============================================================================
-save_pickle(rf_classifier, 'models/rf_classifier.pickle')
-save_pickle(svm_classifier, 'models/svm_classifier.pickle')
-save_pickle(lr_classifier, 'models/lr_classifier.pickle')
-save_pickle(lr_classifier_scaled, 'models/lr_classifier_scaled.pickle')
-save_pickle(nn_classifier_scaled, 'models/nn_classifier_scaled.pickle')
-save_pickle(nn_classifier, 'models/nn_classifier.pickle')
-save_pickle(scaler, 'models/scaler.pickle')
+save_pickle(rf_classifier, 'epos_pickles/rf_classifier.pickle')
+save_pickle(svm_classifier, 'epos_pickles/svm_classifier.pickle')
+#save_pickle(lr_classifier, 'models/lr_classifier.pickle')
+save_pickle(lr_classifier_scaled, 'epos_pickles/lr_classifier_scaled.pickle')
+save_pickle(nn_classifier_scaled, 'epos_pickles/nn_classifier_scaled.pickle')
+#save_pickle(nn_classifier, 'models/nn_classifier.pickle')
+save_pickle(scaler, 'epos_pickles/scaler.pickle')
+
+save_pickle(nb_preds_epos, 'epos_pickles/nb_preds_epos.pickle')
+save_pickle(rf_preds_epos, 'epos_pickles/rf_preds_epos.pickle')
+save_pickle(lr_preds_epos, 'epos_pickles/lr_preds_epos.pickle')
+save_pickle(nn_preds_epos, 'epos_pickles/nn_preds_epos.pickle')
+save_pickle(svm_preds_epos, 'epos_pickles/svm_preds_epos.pickle')

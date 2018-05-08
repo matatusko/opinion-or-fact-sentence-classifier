@@ -6,7 +6,7 @@ import nltk
 import os
 from collections import Counter
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split, cross_val_score, cross_validate
 from time import time
 
 import random
@@ -48,10 +48,11 @@ def build_wordlist(data, min_occurrences=3, max_occurrences=500, stopwords=nltk.
     
     # If the wordlist file has been created earlier, use this one
     if os.path.isfile('bow_models/wordlist.csv'):
-        word_df = pd.read_csv('bow_models/wordlist.csv')
-        word_df = word_df[word_df['occurrences'] > min_occurrences]
-        wordlist = list(word_df.loc[:, 'word'])
-        return
+        with open('bow_models/wordlist.csv', 'r') as f:
+            word_df = pd.read_csv(f)
+            word_df = word_df[word_df['occurrences'] > min_occurrences]
+            wordlist = list(word_df.loc[:, 'word'])
+            return
     
     # Else create a new one
     words = Counter()
@@ -150,17 +151,22 @@ def test_classifier(X_train, y_train, X_test, y_test, classifier):
     return model, precision, recall, accuracy, f1
 
 def cv(classifier, X_train, y_train):
-    print("===============================================")
+    scoring = ['accuracy', 'f1', 'f1_micro', 'f1_macro', 'precision', 'recall']
     classifier_name = str(type(classifier).__name__)
     now = time()
     print("Crossvalidating " + classifier_name + "...")
-    accuracy = [cross_val_score(classifier, X_train, y_train, cv=8, n_jobs=-1)]
+    cv_results = [cross_validate(classifier, X_train, y_train, cv=8, n_jobs=-1, scoring=scoring, return_train_score=False)]
     print("Crosvalidation completed in {0}s".format(time() - now))
-    print("Accuracy: " + str(accuracy[0]))
-    print("Average accuracy: " + str(np.array(accuracy[0]).mean()))
-    print("===============================================")
+    #print("Accuracy: " + str(accuracy[0]))
+    #print("Average accuracy: " + str(np.array(accuracy[0]).mean()))
     
-    return accuracy
+    return cv_results
+
+def print_cm(cm):
+    print("               Predicted Fact     Predicted Opinion      Total ")
+    print("Actual Fact:       ", cm[0][0], "                  ", cm[0][1], "           ", (cm[0][0] + cm[0][1]))
+    print("Actual Optinion:    ", cm[1][0], "                 ",cm[1][1], "         ", (cm[1][0] + cm[1][1]))
+    print("                   ", (cm[0][0] + cm[1][0]), "                 ", (cm[0][1] + cm[1][1]))
 
 #==============================================================================
 # Load up and preprocess the data    
@@ -172,9 +178,10 @@ for example in data:
     new_example = {}
     new_example['sentence'] = example['sentence']
     new_example['y_label'] = example['y_label']
+    new_example['is_train'] = example['is_train']
     new_data.append(new_example)
 assert len(new_data) == len(data)
-    
+
 # For BoW model, we'll remove any special characters and numbers as well as tokenize the sentences and stem them
 data = preprocess_data(new_data)
 data = pd.DataFrame(data)
@@ -193,6 +200,7 @@ whitelist = ['n\'t', 'not']
 # Build a wordlist (or import one if found) for the data
 wordlist = build_wordlist(data, whitelist=whitelist)
 wordlist[:10]
+len(wordlist)
 
 #==============================================================================
 # Transform the data into BOW model
@@ -210,113 +218,124 @@ save_pickle(data, 'bow_pickles/data.pickle')
 bow = load_pickle('bow_pickles/bow.pickle')
 labels = load_pickle('bow_pickles/labels.pickle')
 data = load_pickle('bow_pickles/data.pickle')
-
+bow.iloc[0, 0]
 #==============================================================================
 # Classification Time
 #==============================================================================
 # Split the data
 X_train, X_test, y_train, y_test = train_test_split(bow.iloc[:, 1:], bow.iloc[:, 0],
-                                                    train_size=0.80, stratify=bow.iloc[:, 0],
+                                                    train_size=0.85, stratify=bow.iloc[:, 0],
                                                     random_state=seed)
+X_train = [] 
+X_test = []
+y_train = []
+y_test = []
+for index, example in enumerate(data['is_train']):
+    if example == True:
+        X_train.append(bow.iloc[index, 1:])
+        y_train.append(bow.iloc[index, 0])
+    else:
+        X_test.append(bow.iloc[index, 1:])
+        y_test.append(bow.iloc[index, 0])
+assert len(X_test) == len(y_test)
+assert len(X_train) == len(y_train)
 
-# BOW + Naive Bayes
+save_pickle(X_train, 'bow_pickles/X_train.pickle')
+save_pickle(X_test, 'bow_pickles/X_test.pickle')
+save_pickle(y_train, 'bow_pickles/y_train.pickle')
+save_pickle(y_test, 'bow_pickles/y_test.pickle')
+
+#==============================================================================
+# # BOW + Naive Bayes
+#==============================================================================
 from sklearn.naive_bayes import BernoulliNB
 nb_model, precision, recall, accuracy, f1 = test_classifier(X_train, y_train, X_test, y_test, BernoulliNB())
-nb_acc = cv(BernoulliNB(), bow.iloc[:,1:], bow.iloc[:,0])
-#==============================================================================
-# Testing BernoulliNB
-# Learing time 1.833298921585083s
-# Predicting time 0.3890223503112793s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.97222222  0.98237598]
-# Precision[ 0.99578504  0.96784566]
-# Recall   [ 0.94974874  0.99734924]
-# Accuracy 0.978434504792
-# ===============================================
-#==============================================================================
+nb_acc = cv(BernoulliNB(), bow.iloc[:, 1:], bow.iloc[:, 0])
 
-# Random Forest
+nb_preds_bow = nb_model.predict(X_test)
+nb_cm = metrics.confusion_matrix(y_test, nb_preds_bow)
+print_cm(nb_cm)
+
+#NEW WITH PROPER DIVISION ?
+#               Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1080                   41           1121
+# Actual Optinion:     5                   1105           1110
+#                     1085                 1146
+
+
+#==============================================================================
+# # Random Forest
+#==============================================================================
 from sklearn.ensemble import RandomForestClassifier
 rf_model, precision, recall, accuracy, f1 = test_classifier(X_train, y_train, X_test, y_test, 
                                                             RandomForestClassifier(random_state=seed, 
                                                                                    n_estimators=403, 
                                                                                    n_jobs=-1))
 rf_acc = cv(RandomForestClassifier(n_estimators=403, n_jobs=-1, random_state=seed), bow.iloc[:, 1:], bow.iloc[:, 0])
-#==============================================================================
-# Testing RandomForestClassifier
-# Learing time 63.64042282104492s
-# Predicting time 0.69962477684021s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.93894305  0.9610984 ]
-# Precision[ 0.9591195  0.9483871]
-# Recall   [ 0.91959799  0.97415507]
-# Accuracy 0.952476038339
-#==============================================================================
 
-# Suppor Vector Machine
+rf_preds_bow = rf_model.predict(X_test)
+rf_cm = metrics.confusion_matrix(y_test, rf_preds_bow)
+print_cm(rf_cm)
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1042                    79             1121
+# Actual Optinion:     16                   1094           1110
+#                     1058                   1173
+
+#==============================================================================
+# # Suppor Vector Machine
+#==============================================================================
 from sklearn import svm
 svm_model, precision, recall, accuracy, f1 = test_classifier(X_train, y_train, X_test, y_test, 
                                                             svm.SVC())
 svm_acc = cv(svm.SVC(), bow.iloc[:, 1:], bow.iloc[:, 0])
-#==============================================================================
-# Testing SVC
-# Learing time 569.7381541728973s
-# Predicting time 115.31103110313416s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.          0.75205582]
-# Precision[ 0.          0.60263578]
-# Recall   [ 0.  1.]
-# Accuracy 0.602635782748
-#==============================================================================
+save_pickle(svm_acc, 'bow_pickles/svm_acc.pickle')
 
-# Logistic Regression (since we're using BOW (binary features), there is not need for feature scaling)
+svm_preds_bow = svm_model.predict(X_test)
+svm_cm = metrics.confusion_matrix(y_test, svm_preds_bow)
+print_cm(svm_cm)
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        10                    1111             1121
+# Actual Optinion:     0                   1110           1110
+#                     10                   2221
+
+#==============================================================================
+# # Logistic Regression (since we're using BOW (binary features), there is not need for feature scaling)
+#==============================================================================
 from sklearn.linear_model import LogisticRegression
 lr_model, precision, recall, accuracy, f1 = test_classifier(X_train, y_train, X_test, y_test, 
                                                             LogisticRegression(random_state=0, verbose=1, C=0.01))
 lr_acc = cv(LogisticRegression(random_state=0, verbose=1, C=0.01), bow.iloc[:, 1:], bow.iloc[:, 0])
 
-#==============================================================================
-# Testing LogisticRegression
-# [LibLinear]Learing time 0.7871778011322021s
-# Predicting time 0.0686790943145752s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.8631699   0.92624462]
-# Precision[ 0.99736495  0.86361032]
-# Recall   [ 0.76080402  0.99867462]
-# Accuracy 0.904153354633
-#
-# CV Accuracy: [ 0.90990415  0.91373802  0.91693291  0.90926518  0.90990415  0.91246006
-#                0.91304348  0.90025575]
-# Average accuracy: 0.910687963198
-#==============================================================================
+lr_preds_bow = lr_model.predict(X_test)
+lr_cm = metrics.confusion_matrix(y_test, lr_preds_bow)
+print_cm(lr_cm)
 
-# Neural Network
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1041                    80             1121
+# Actual Optinion:     18                   1092           1110
+#                     1059                   1172
+
+
+#==============================================================================
+# # Neural Network
+#==============================================================================
 from sklearn.neural_network import MLPClassifier
 nn_classifier = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(256, 3), random_state=1)
 nn_model, precision, recall, accuracy, f1 = test_classifier(X_train, y_train, X_test, y_test, 
                                                             nn_classifier)
 nn_acc = cv(nn_classifier, bow.iloc[:, 1:], bow.iloc[:, 0])
 
-#==============================================================================
-# Testing MLPClassifier
-# Learing time 63.365925550460815s
-# Predicting time 0.16393327713012695s
-# =================== Results ===================
-#             Fact     Opinion                   
-# F1       [ 0.96911392  0.9798879 ]
-# Precision[ 0.97653061  0.97506562]
-# Recall   [ 0.96180905  0.98475812]
-# Accuracy 0.975638977636
-#
-# Crosvalidation completed in 688.3820369243622s
-# CV Accuracy: [ 0.96996805  0.96613419  0.97827476  0.96613419  0.97060703  0.96932907
-#                0.9629156   0.97826087]
-# Average accuracy: 0.970202969367
-#==============================================================================
+nn_preds_bow = nn_model.predict(X_test)
+nn_cm = metrics.confusion_matrix(y_test, nn_preds_bow)
+print_cm(nn_cm)
+
+#                Predicted Fact     Predicted Opinion      Total 
+# Actual Fact:        1086                    35           1121
+# Actual Optinion:     17                   1093           1110
+#                     1103                   1128
+
 
 save_pickle(nn_model, 'bow_pickles/nn_model.pickle')
 save_pickle(lr_model, 'bow_pickles/lr_model.pickle')
@@ -324,6 +343,13 @@ save_pickle(svm_model, 'bow_pickles/svm_model.pickle')
 save_pickle(rf_model, 'bow_pickles/rf_model.pickle')
 save_pickle(nb_model, 'bow_pickles/nb_model.pickle')
 
+save_pickle(nb_preds_bow, 'bow_pickles/nb_preds_bow.pickle')
+save_pickle(rf_preds_bow, 'bow_pickles/rf_preds_bow.pickle')
+save_pickle(lr_preds_bow, 'bow_pickles/lr_preds_bow.pickle')
+save_pickle(nn_preds_bow, 'bow_pickles/nn_preds_bow.pickle')
+save_pickle(svm_preds_bow, 'bow_pickles/svm_preds_bow.pickle')
+
+nb_model = load_pickle('bow_pickles/nb_model.pickle')
 #==============================================================================
 # Sanity Check on new data
 #==============================================================================
@@ -337,4 +363,17 @@ test_sentences.append('The earliest origins to the modern doughnuts are generall
 test_sentences.append('This donut is quite possibly the best tasting donut in the entire world.')
 
 for test_sent in test_sentences:
-    casual_test(test_sent, lr_model, wordlist)
+    casual_test(test_sent, nn_model, wordlist)
+    
+    
+nn_model = load_pickle('bow_pickles/nn_model.pickle')
+lr_model = load_pickle('bow_pickles/lr_model.pickle')
+svm_model = load_pickle('bow_pickles/svm_model.pickle') 
+rf_model = load_pickle('bow_pickles/rf_model.pickle')
+nb_model = load_pickle('bow_pickles/nb_model.pickle')
+
+nb_preds_bow = load_pickle('bow_pickles/nb_preds_bow.pickle')
+rf_preds_bow = load_pickle('bow_pickles/rf_preds_bow.pickle')
+lr_preds_bow = load_pickle('bow_pickles/lr_preds_bow.pickle')
+nn_preds_bow = load_pickle('bow_pickles/nn_preds_bow.pickle')
+svm_preds_bow = load_pickle('bow_pickles/svm_preds_bow.pickle')

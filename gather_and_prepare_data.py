@@ -19,7 +19,15 @@ articles = ['https://en.wikipedia.org/wiki/World_War_I',
             'https://en.wikipedia.org/wiki/Triangular_trade',
             'https://en.wikipedia.org/wiki/Song_dynasty',
             'https://en.wikipedia.org/wiki/Nanking_Massacre',
-            'https://en.wikipedia.org/wiki/The_Holocaust']
+            'https://en.wikipedia.org/wiki/The_Holocaust',
+            'https://en.wikipedia.org/wiki/Japan',
+            'https://en.wikipedia.org/wiki/Sumo',
+            'https://en.wikipedia.org/wiki/Sheshi',
+            'https://en.wikipedia.org/wiki/Chickpea',
+            'https://en.wikipedia.org/wiki/Treaty_of_Versailles',
+            'https://en.wikipedia.org/wiki/Economics',
+            'https://en.wikipedia.org/wiki/Law',
+            'https://en.wikipedia.org/wiki/Thor']
 
 def get_wiki_article(wiki_link, verbose=True):
     # Try connecting to the website and retrieve the question/answers pairs
@@ -182,7 +190,7 @@ for article in parsed_wiki_articles:
         sentences_with_features.append(sentence_with_features)
         
 print('Got {} factual sentences from wikipedia.'.format(len(sentences_with_features)))
-
+factual = sentences_with_features
 #==============================================================================
 # LOAD OPINIOSIS 
 #==============================================================================

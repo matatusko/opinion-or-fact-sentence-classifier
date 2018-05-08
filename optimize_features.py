@@ -25,6 +25,11 @@ def test_features(data, pick_features=0):
         # Keep only the most important
         features = data[most_important].columns
         
+    elif pick_features == 5:
+        # Keep only POS and entities
+        columns_to_drop += dep_labels
+        features = data.drop(columns_to_drop, axis=1).columns
+        
     else:
         raise("Invalid choice, pick between 0 and 4 inclusive.")
         return
